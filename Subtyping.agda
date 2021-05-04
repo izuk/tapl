@@ -75,13 +75,14 @@ lemma-record (s-rcddepth ⟦ρ₁⟧<:⟦ψ₁⟧ _) (S l∷T‼ψ) with lemma-r
 
 data Term : Set where
   #_ : ℕ → Term
-  ⟦_⟧ : Rec Term → Term
   ƛ_∷_⊸_ : ℕ → Type → Term → Term
   _∘_ : Term → Term → Term
+  ⟦_⟧ : Rec Term → Term
+  _‼_ : Term → ℕ → Term
 
 data Value : Term → Set where
   v-ƛ : ∀ {x T t} → Value (ƛ x ∷ T ⊸ t)
-  v-rec : ∀ {ρ} → Value ⟦ ρ ⟧
+  v-rcd : ∀ {ρ} → Value ⟦ ρ ⟧
 
 data Context : Set where
   Ø : Context
@@ -98,6 +99,8 @@ data _:-_∷_ : Context → Term → Type → Set where
   t-abs : ∀ {Γ x t₂ T₁ T₂} → (Γ , x ∷ T₁) :- t₂ ∷ T₂ → Γ :- (ƛ x ∷ T₁ ⊸ t₂) ∷ (T₁ => T₂)
   t-app : ∀ {Γ t₁ t₂ T₁₁ T₁₂} → Γ :- t₁ ∷ (T₁₁ => T₁₂) → Γ :- t₂ ∷ T₁₁ → Γ :- (t₁ ∘ t₂) ∷ T₁₂
   t-sub : ∀ {Γ t S T} → Γ :- t ∷ S → S <: T → Γ :- t ∷ T
+  t-rcd : ∀ {Γ r ρ t T l m₁ m₂} → Γ :- ⟦ r ⟧ ∷ ⟦ ρ ⟧ → Γ :- t ∷ T → Γ :- ⟦ r , l ∷ t ⟨ m₁ ⟩ ⟧ ∷ ⟦ ρ , l ∷ T ⟨ m₂ ⟩ ⟧
+  t-proj : ∀ {Γ t ρ T l} → Γ :- t ∷ ⟦ ρ ⟧ → l ∷ T ‼ ρ → Γ :- (t ‼ l) ∷ T
 
 lemma₁ : ∀ {Γ x s₂ S₁ T₁ T₂}
   → Γ :- (ƛ x ∷ S₁ ⊸ s₂) ∷ (T₁ => T₂)
@@ -111,6 +114,14 @@ lemma-canonical₁ : ∀ {Γ t T₁ T₂}
   → Γ :- t ∷ (T₁ => T₂)
   → Value t
   → Σ[ (x , T , t₁) ∈ (ℕ × Type × Term) ] (t ≡ ƛ x ∷ T ⊸ t₁)
-lemma-canonical₁ (t-abs {_} {x} {s} {T₁} _) _ = (x , T₁ , s) , refl
+lemma-canonical₁ (t-abs {x = x} {t₂ = s} {T₁ = T₁} _) _ = (x , T₁ , s) , refl
 lemma-canonical₁ (t-sub J S<:T₁=>T₂) v with lemma-inversion₁ S<:T₁=>T₂
 ... | _ , refl , _ = lemma-canonical₁ J v
+
+lemma-canonical₂ : ∀ {Γ t ρ}
+  → Γ :- t ∷ ⟦ ρ ⟧
+  → Value t
+  → Σ[ r ∈ Rec Term ] (t ≡ ⟦ r ⟧)
+lemma-canonical₂ (t-rcd {r = r} {t = t} {l = l} {m₁ = m₁} _ _) _ = (r , l ∷ t ⟨ m₁ ⟩) , refl
+lemma-canonical₂ (t-sub J S<:⟦ρ⟧) v with lemma-inversion₂ S<:⟦ρ⟧
+... | _ , refl = lemma-canonical₂ J v
