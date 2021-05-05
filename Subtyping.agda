@@ -1,10 +1,9 @@
 module Subtyping where
 
-open import Data.Nat using (ℕ; _≥_; zero; suc)
-open import Data.Nat.Properties using (≤-refl)
+open import Data.Nat using (ℕ; _≥_; _<?_; zero; suc)
 open import Data.Product using (Σ; Σ-syntax; _×_; _,_)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl)
-open import Relation.Nullary using (¬_)
+open import Relation.Nullary using (¬_; yes; no)
 
 infix 4 _=>_
 
@@ -12,23 +11,33 @@ infix 4 _=>_
 -- `free` picks out the next available index.
 -- Adding to a record requires a proof that the new index is free.
 
-data Rec (A : Set) : Set
-free : ∀ {A} → Rec A → ℕ
+data Rcd (A : Set) : Set
+free : ∀ {A} → Rcd A → ℕ
 
-data Rec A where
-  Ø : Rec A
-  _,_∷_⟨_⟩ : (ρ : Rec A) → (l : ℕ) → A → (l ≥ free ρ) → Rec A
+data Rcd A where
+  Ø : Rcd A
+  _,_∷_⟨_⟩ : (ρ : Rcd A) → (l : ℕ) → A → (l ≥ free ρ) → Rcd A
 
 free Ø = zero
 free (_ , l ∷ _ ⟨ _ ⟩) = suc l
 
-data _∷_‼_ {A : Set} : ℕ → A → Rec A → Set where
+data _∷_‼_ {A : Set} : ℕ → A → Rcd A → Set where
   Z : ∀ {ρ l x m} → l ∷ x ‼ (ρ , l ∷ x ⟨ m ⟩)
   S : ∀ {ρ l x l₁ x₁ m} → l ∷ x ‼ ρ → l ∷ x ‼ (ρ , l₁ ∷ x₁ ⟨ m ⟩)
 
+data All  {A : Set} (P : A → Set) : Rcd A → Set where
+  Z : All P Ø
+  S : ∀ {ρ l x m} → All P ρ → P x → All P (ρ , l ∷ x ⟨ m ⟩ )
+
+prefix : {A : Set} → Rcd A → ℕ → Rcd A
+prefix Ø _ = Ø
+prefix (ρ , l ∷ x ⟨ m ⟩) k with l <? k
+... | yes _ = ρ , l ∷ x ⟨ m ⟩
+... | no _ = prefix ρ k
+
 data Type : Set where
   _=>_ : Type → Type → Type
-  ⟦_⟧ : Rec Type → Type
+  ⟦_⟧ : Rcd Type → Type
   Top : Type
 
 infix 3 _<:_
@@ -52,7 +61,7 @@ lemma-inversion₁ (s-trans S<:U U<:T₁=>T₂) with lemma-inversion₁ U<:T₁=
 
 lemma-inversion₂ : ∀ {ρ S}
   → S <: ⟦ ρ ⟧
-  → Σ[ ψ ∈ Rec Type ] (S ≡ ⟦ ψ ⟧)
+  → Σ[ ψ ∈ Rcd Type ] (S ≡ ⟦ ψ ⟧)
 lemma-inversion₂ (s-refl {⟦ ρ ⟧}) = ρ , refl
 lemma-inversion₂ (s-trans S<:U U<:⟦ρ⟧) with lemma-inversion₂ U<:⟦ρ⟧
 ... | ψ , refl with lemma-inversion₂ S<:U
@@ -77,7 +86,7 @@ data Term : Set where
   #_ : ℕ → Term
   ƛ_∷_⊸_ : ℕ → Type → Term → Term
   _∘_ : Term → Term → Term
-  ⟦_⟧ : Rec Term → Term
+  ⟦_⟧ : Rcd Term → Term
   _‼_ : Term → ℕ → Term
 
 data Value : Term → Set where
@@ -121,7 +130,18 @@ lemma-canonical₁ (t-sub J S<:T₁=>T₂) v with lemma-inversion₁ S<:T₁=>T�
 lemma-canonical₂ : ∀ {Γ t ρ}
   → Γ :- t ∷ ⟦ ρ ⟧
   → Value t
-  → Σ[ r ∈ Rec Term ] (t ≡ ⟦ r ⟧)
+  → Σ[ r ∈ Rcd Term ] (t ≡ ⟦ r ⟧)
 lemma-canonical₂ (t-rcd {r = r} {t = t} {l = l} {m₁ = m₁} _ _) _ = (r , l ∷ t ⟨ m₁ ⟩) , refl
 lemma-canonical₂ (t-sub J S<:⟦ρ⟧) v with lemma-inversion₂ S<:⟦ρ⟧
 ... | _ , refl = lemma-canonical₂ J v
+
+postulate [_⊸_]_ : ℕ → Term → Term → Term
+
+data _⊸_ : Term → Term → Set where
+  e-app₁ : ∀ {t₁ t₁' t₂} → t₁ ⊸ t₁' → (t₁ ∘ t₂) ⊸ (t₁' ∘ t₂)
+  e-app₂ : ∀ {v₁ t₂ t₂'} → t₂ ⊸ t₂' → Value v₁ → (v₁ ∘ t₂) ⊸ (v₁ ∘ t₂')
+  e-appabs : ∀ {x T₁₁ t₁₂ v₂} → Value v₂ → ((ƛ x ∷ T₁₁ ⊸ t₁₂) ∘ v₂) ⊸ ([ x ⊸ v₂ ] t₁₂)
+  e-projrcd : ∀ {r l v} → l ∷ v ‼ r → All Value r → (⟦ r ⟧ ‼ l) ⊸ v
+  e-proj : ∀ {t₁ t₁' l} → t₁ ⊸ t₁' → (t₁ ‼ l) ⊸ (t₁' ‼ l)
+  e-rcd₁ : ∀ {t t' r l m} → t ⊸ t' → All Value r → ⟦ r , l ∷ t ⟨ m ⟩ ⟧ ⊸ ⟦ r , l ∷ t' ⟨ m ⟩ ⟧
+  e-rcd₂ : ∀ {r r' l t m m'} → ⟦ r ⟧ ⊸ ⟦ r' ⟧ → ⟦ r , l ∷ t ⟨ m ⟩ ⟧ ⊸ ⟦ r' , l ∷ t ⟨ m' ⟩ ⟧
