@@ -1,43 +1,37 @@
 module Subtyping where
 
-open import Data.Nat using (ℕ; _≥_; _<?_; zero; suc)
+open import Data.Empty using (⊥-elim)
+open import Data.Nat using (ℕ; zero; suc; _≟_)
 open import Data.Product using (Σ; Σ-syntax; _×_; _,_)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl)
 open import Relation.Nullary using (¬_; yes; no)
 
-infix 4 _=>_
+infix 3 _,_∷_
 
--- Records are sorted by index.
--- `free` picks out the next available index.
--- Adding to a record requires a proof that the new index is free.
-
-data Rcd (A : Set) : Set
-free : ∀ {A} → Rcd A → ℕ
-
-data Rcd A where
+data Rcd (A : Set) : Set where
   Ø : Rcd A
-  _,_∷_⟨_⟩ : (ρ : Rcd A) → (l : ℕ) → A → (l ≥ free ρ) → Rcd A
+  _,_∷_ : Rcd A → ℕ → A → Rcd A
 
-free Ø = zero
-free (_ , l ∷ _ ⟨ _ ⟩) = suc l
+infix 4 _∷_∈_
 
-data _∷_‼_ {A : Set} : ℕ → A → Rcd A → Set where
-  Z : ∀ {ρ l x m} → l ∷ x ‼ (ρ , l ∷ x ⟨ m ⟩)
-  S : ∀ {ρ l x l₁ x₁ m} → l ∷ x ‼ ρ → l ∷ x ‼ (ρ , l₁ ∷ x₁ ⟨ m ⟩)
+data _∷_∈_ {A : Set} : ℕ → A → Rcd A → Set where
+  zero : ∀ {r l x} → l ∷ x ∈ (r , l ∷ x)
+  suc : ∀ {r l x l₁ x₁} → l ∷ x ∈ r → ¬ (l ≡ l₁) → l ∷ x ∈ (r , l₁ ∷ x₁)
 
-data All  {A : Set} (P : A → Set) : Rcd A → Set where
-  Z : All P Ø
-  S : ∀ {ρ l x m} → All P ρ → P x → All P (ρ , l ∷ x ⟨ m ⟩ )
+data All {A : Set} (P : A → Set) : Rcd A → Set where
+  all : ∀ {r} → (∀ {l x} → l ∷ x ∈ r → P x) → All P r
 
-prefix : {A : Set} → Rcd A → ℕ → Rcd A
-prefix Ø _ = Ø
-prefix (ρ , l ∷ x ⟨ m ⟩) k with l <? k
-... | yes _ = ρ , l ∷ x ⟨ m ⟩
-... | no _ = prefix ρ k
+rcd-uniq : {A : Set} → {r : Rcd A} → ∀ {l x₁ x₂} → l ∷ x₁ ∈ r → l ∷ x₂ ∈ r → x₁ ≡ x₂
+rcd-uniq zero zero = refl
+rcd-uniq zero (suc _ ¬l≡l₁) = ⊥-elim (¬l≡l₁ refl)
+rcd-uniq (suc _ ¬l≡l₁) zero = ⊥-elim (¬l≡l₁ refl)
+rcd-uniq (suc ∈₁ _) (suc ∈₂ _) = rcd-uniq ∈₁ ∈₂
+
+infix 4 _=>_
 
 data Type : Set where
   _=>_ : Type → Type → Type
-  ⟦_⟧ : Rcd Type → Type
+  ⟨_⟩ : Rcd Type → Type
   Top : Type
 
 infix 3 _<:_
@@ -47,8 +41,7 @@ data _<:_ : Type → Type → Set where
   s-trans : ∀ {S T U} → S <: U → U <: T → S <: T
   s-top : ∀ {S} → S <: Top
   s-arrow : ∀ {S₁ S₂ T₁ T₂} → T₁ <: S₁ → S₂ <: T₂ → S₁ => S₂ <: T₁ => T₂
-  s-rcdwidth : ∀ {ρ l T m} → ⟦ ρ , l ∷ T ⟨ m ⟩ ⟧ <: ⟦ ρ ⟧
-  s-rcddepth : ∀ {ρ₁ ρ₂ l T₁ T₂ m₁ m₂} → ⟦ ρ₁ ⟧ <: ⟦ ρ₂ ⟧ → T₁ <: T₂ → ⟦ ρ₁ , l ∷ T₁ ⟨ m₁ ⟩ ⟧ <: ⟦ ρ₂ , l ∷ T₂ ⟨ m₂ ⟩ ⟧
+  s-rcd : ∀ {ρ ψ} → (∀ {l T} → l ∷ T ∈ ψ → Σ[ S ∈ Type ] (l ∷ S ∈ ρ) × (S <: T)) → ⟨ ρ ⟩ <: ⟨ ψ ⟩
 
 lemma-inversion₁ : ∀ {S T₁ T₂}
   → S <: T₁ => T₂
@@ -60,64 +53,64 @@ lemma-inversion₁ (s-trans S<:U U<:T₁=>T₂) with lemma-inversion₁ U<:T₁=
 ... | (S₁ , S₂) , (refl , U₂<:S₁ , S₂<:U₂) = (S₁ , S₂) , (refl , s-trans T₁<:U₁ U₂<:S₁ , s-trans S₂<:U₂ U₂<:T₂)
 
 lemma-inversion₂ : ∀ {ρ S}
-  → S <: ⟦ ρ ⟧
-  → Σ[ ψ ∈ Rcd Type ] (S ≡ ⟦ ψ ⟧)
-lemma-inversion₂ (s-refl {⟦ ρ ⟧}) = ρ , refl
-lemma-inversion₂ (s-trans S<:U U<:⟦ρ⟧) with lemma-inversion₂ U<:⟦ρ⟧
+  → S <: ⟨ ρ ⟩
+  → Σ[ ψ ∈ Rcd Type ] (S ≡ ⟨ ψ ⟩)
+lemma-inversion₂ (s-refl {⟨ ρ ⟩}) = ρ , refl
+lemma-inversion₂ (s-trans S<:U U<:⟨ρ⟩) with lemma-inversion₂ U<:⟨ρ⟩
 ... | ψ , refl with lemma-inversion₂ S<:U
 ... | ψ₁ , refl = ψ₁ , refl
-lemma-inversion₂ (s-rcdwidth {ρ} {l} {T} {m}) = (ρ , l ∷ T ⟨ m ⟩) , refl
-lemma-inversion₂ (s-rcddepth {ρ₁} {_} {l} {T₁} {_} {m₁} {_} _ _) = (ρ₁ , l ∷ T₁ ⟨ m₁ ⟩) , refl
+lemma-inversion₂ (s-rcd {ρ = ρ} _) = ρ , refl
 
-lemma-record : ∀ {ρ ψ l T} → ⟦ ρ ⟧ <: ⟦ ψ ⟧ → l ∷ T ‼ ψ → Σ[ S ∈ Type ] (l ∷ S ‼ ρ) × (S <: T)
-lemma-record s-refl (Z {x = T}) = T , Z , s-refl
-lemma-record s-refl (S {x = T} l∷T‼ψ) = T , S l∷T‼ψ , s-refl
-lemma-record (s-trans ⟦ρ⟧<:U U<:⟦ψ⟧) l∷T‼ψ with lemma-inversion₂ U<:⟦ψ⟧
-... | ψ₁ , refl with lemma-record U<:⟦ψ⟧ l∷T‼ψ
-... | T₁ , l∷T₁‼ψ₁ , T₁<:T with lemma-record ⟦ρ⟧<:U l∷T₁‼ψ₁
-... | S₁ , l∷S₁‼ρ , S₁<:T₁ = S₁ , l∷S₁‼ρ , s-trans S₁<:T₁ T₁<:T
-lemma-record s-rcdwidth (Z {x = T}) = T , S Z , s-refl
-lemma-record s-rcdwidth (S {x = T} l∷T‼ψ) = T , (S (S l∷T‼ψ)) , s-refl
-lemma-record (s-rcddepth {T₁ = S₁} _ S₁<:T) Z = S₁ , Z , S₁<:T
-lemma-record (s-rcddepth ⟦ρ₁⟧<:⟦ψ₁⟧ _) (S l∷T‼ψ) with lemma-record ⟦ρ₁⟧<:⟦ψ₁⟧ l∷T‼ψ
-... | S₂ , l∷S₂‼ρ₁ , S₂<:T = S₂ , S l∷S₂‼ρ₁ , S₂<:T
+lemma-record : ∀ {ρ ψ l T}
+  → ⟨ ρ ⟩ <: ⟨ ψ ⟩
+  → l ∷ T ∈ ψ
+  → Σ[ S ∈ Type ] (l ∷ S ∈ ρ) × (S <: T)
+lemma-record {T = T} s-refl l∷T∈ψ = T , l∷T∈ψ , s-refl
+lemma-record (s-trans ⟨ρ⟩<:U U<:⟨ψ⟩) l∷T∈ψ with lemma-inversion₂ U<:⟨ψ⟩
+... | ψ₁ , refl with lemma-record U<:⟨ψ⟩ l∷T∈ψ
+... | T₁ , l∷T₁∈ψ₁ , T₁<:T with lemma-record ⟨ρ⟩<:U l∷T₁∈ψ₁
+... | S₁ , l∷S₁∈ρ , S₁<:T₁ = S₁ , l∷S₁∈ρ , s-trans S₁<:T₁ T₁<:T
+lemma-record (s-rcd P) = P
 
 data Term : Set where
   #_ : ℕ → Term
   ƛ_∷_⊸_ : ℕ → Type → Term → Term
   _∘_ : Term → Term → Term
-  ⟦_⟧ : Rcd Term → Term
+  ⟨_⟩ : Rcd Term → Term
   _‼_ : Term → ℕ → Term
 
-data Value : Term → Set where
-  v-ƛ : ∀ {x T t} → Value (ƛ x ∷ T ⊸ t)
-  v-rcd : ∀ {ρ} → Value ⟦ ρ ⟧
-
-data Context : Set where
-  Ø : Context
-  _,_∷_ : Context → ℕ → Type → Context
-
-infix 4 _∷_∈_
-
-data _∷_∈_ : ℕ → Type → Context → Set where
-  Z : ∀ {Γ x T} → x ∷ T ∈ Γ , x ∷ T
-  S : ∀ {Γ x T y T₁} → x ∷ T ∈ Γ → ¬ (x ≡ y) → x ∷ T ∈ Γ , y ∷ T₁
+Context : Set
+Context = Rcd Type
 
 data _:-_∷_ : Context → Term → Type → Set where
   t-var : ∀ {Γ x T} → x ∷ T ∈ Γ → Γ :- (# x) ∷ T
   t-abs : ∀ {Γ x t₂ T₁ T₂} → (Γ , x ∷ T₁) :- t₂ ∷ T₂ → Γ :- (ƛ x ∷ T₁ ⊸ t₂) ∷ (T₁ => T₂)
   t-app : ∀ {Γ t₁ t₂ T₁₁ T₁₂} → Γ :- t₁ ∷ (T₁₁ => T₁₂) → Γ :- t₂ ∷ T₁₁ → Γ :- (t₁ ∘ t₂) ∷ T₁₂
   t-sub : ∀ {Γ t S T} → Γ :- t ∷ S → S <: T → Γ :- t ∷ T
-  t-rcd : ∀ {Γ r ρ t T l m₁ m₂} → Γ :- ⟦ r ⟧ ∷ ⟦ ρ ⟧ → Γ :- t ∷ T → Γ :- ⟦ r , l ∷ t ⟨ m₁ ⟩ ⟧ ∷ ⟦ ρ , l ∷ T ⟨ m₂ ⟩ ⟧
-  t-proj : ∀ {Γ t ρ T l} → Γ :- t ∷ ⟦ ρ ⟧ → l ∷ T ‼ ρ → Γ :- (t ‼ l) ∷ T
+  t-rcd : ∀ {Γ ρ r} → (∀ {l T} → l ∷ T ∈ ρ → Σ[ t ∈ Term ] (l ∷ t ∈ r) × (Γ :- t ∷ T)) → Γ :- ⟨ r ⟩ ∷ ⟨ ρ ⟩
+  t-proj : ∀ {Γ t ρ T l} → Γ :- t ∷ ⟨ ρ ⟩ → l ∷ T ∈ ρ → Γ :- (t ‼ l) ∷ T
 
-lemma₁ : ∀ {Γ x s₂ S₁ T₁ T₂}
-  → Γ :- (ƛ x ∷ S₁ ⊸ s₂) ∷ (T₁ => T₂)
-  → (T₁ <: S₁) × ((Γ , x ∷ S₁) :- s₂ ∷ T₂)
-lemma₁ (t-abs J) = s-refl , J
-lemma₁ (t-sub J U<:T) with lemma-inversion₁ U<:T
-... | (U₁ , U₂) , refl , T₁<:U₁ , U₂<:T₂ with lemma₁ J
-... | U₁<:S₁ , J₁ = s-trans T₁<:U₁ U₁<:S₁ , t-sub J₁ U₂<:T₂
+lemma-match : ∀ {Γ r ρ T l}
+  → Γ :- ⟨ r ⟩ ∷ ⟨ ρ ⟩
+  → l ∷ T ∈ ρ
+  → Σ[ t ∈ Term ] (l ∷ t ∈ r) × (Γ :- t ∷ T)
+lemma-match (t-sub Γ:-t∷⟨ψ⟩ ⟨ψ⟩<:⟨ρ⟩) l∷T∈ρ with lemma-inversion₂ ⟨ψ⟩<:⟨ρ⟩
+... | ψ , refl with lemma-record ⟨ψ⟩<:⟨ρ⟩ l∷T∈ρ
+... | S₁ , l∷S₁∈ψ , S₁<:T with lemma-match Γ:-t∷⟨ψ⟩ l∷S₁∈ψ
+... | t , l∷t∈r , Γ:-t∷S₁ = t , l∷t∈r , t-sub Γ:-t∷S₁ S₁<:T
+lemma-match (t-rcd P) l∷T∈ρ = P l∷T∈ρ
+
+lemma-15'3'3 : ∀ {Γ x S₁ t T₁ T₂}
+  → Γ :- (ƛ x ∷ S₁ ⊸ t) ∷ (T₁ => T₂)
+  → (T₁ <: S₁) × ((Γ , x ∷ S₁) :- t ∷ T₂)
+lemma-15'3'3 (t-abs S₁∷T₂) = s-refl , S₁∷T₂
+lemma-15'3'3 (t-sub S₁∷U₁=>U₂ U₁=>U₂<:T₁=>T₂) with lemma-inversion₁ U₁=>U₂<:T₁=>T₂
+... | (U₁ , U₂) , refl , T₁<:U₁ , U₂<:T₂ with lemma-15'3'3 S₁∷U₁=>U₂
+... | U₁<:S₁ , S₁∷U₂ = s-trans T₁<:U₁ U₁<:S₁ , t-sub S₁∷U₂ U₂<:T₂
+
+data Value : Term → Set where
+  v-ƛ : ∀ {x T t} → Value (ƛ x ∷ T ⊸ t)
+  v-rcd : ∀ {r} → All Value r → Value ⟨ r ⟩
 
 lemma-canonical₁ : ∀ {Γ t T₁ T₂}
   → Γ :- t ∷ (T₁ => T₂)
@@ -128,20 +121,57 @@ lemma-canonical₁ (t-sub J S<:T₁=>T₂) v with lemma-inversion₁ S<:T₁=>T�
 ... | _ , refl , _ = lemma-canonical₁ J v
 
 lemma-canonical₂ : ∀ {Γ t ρ}
-  → Γ :- t ∷ ⟦ ρ ⟧
+  → Γ :- t ∷ ⟨ ρ ⟩
   → Value t
-  → Σ[ r ∈ Rcd Term ] (t ≡ ⟦ r ⟧)
-lemma-canonical₂ (t-rcd {r = r} {t = t} {l = l} {m₁ = m₁} _ _) _ = (r , l ∷ t ⟨ m₁ ⟩) , refl
-lemma-canonical₂ (t-sub J S<:⟦ρ⟧) v with lemma-inversion₂ S<:⟦ρ⟧
+  → Σ[ r ∈ Rcd Term ] (t ≡ ⟨ r ⟩)
+lemma-canonical₂ (t-rcd {r = r} _) _ = r , refl
+lemma-canonical₂ (t-sub J S<:⟨ρ⟩) v with lemma-inversion₂ S<:⟨ρ⟩
 ... | _ , refl = lemma-canonical₂ J v
 
 postulate [_⊸_]_ : ℕ → Term → Term → Term
+
+postulate lemma-substitution : ∀ {Γ x s t S T} → (Γ , x ∷ S) :- t ∷ T → Γ :- s ∷ S → Γ :- [ x ⊸ s ] t ∷ T
 
 data _⊸_ : Term → Term → Set where
   e-app₁ : ∀ {t₁ t₁' t₂} → t₁ ⊸ t₁' → (t₁ ∘ t₂) ⊸ (t₁' ∘ t₂)
   e-app₂ : ∀ {v₁ t₂ t₂'} → t₂ ⊸ t₂' → Value v₁ → (v₁ ∘ t₂) ⊸ (v₁ ∘ t₂')
   e-appabs : ∀ {x T₁₁ t₁₂ v₂} → Value v₂ → ((ƛ x ∷ T₁₁ ⊸ t₁₂) ∘ v₂) ⊸ ([ x ⊸ v₂ ] t₁₂)
-  e-projrcd : ∀ {r l v} → l ∷ v ‼ r → All Value r → (⟦ r ⟧ ‼ l) ⊸ v
   e-proj : ∀ {t₁ t₁' l} → t₁ ⊸ t₁' → (t₁ ‼ l) ⊸ (t₁' ‼ l)
-  e-rcd₁ : ∀ {t t' r l m} → t ⊸ t' → All Value r → ⟦ r , l ∷ t ⟨ m ⟩ ⟧ ⊸ ⟦ r , l ∷ t' ⟨ m ⟩ ⟧
-  e-rcd₂ : ∀ {r r' l t m m'} → ⟦ r ⟧ ⊸ ⟦ r' ⟧ → ⟦ r , l ∷ t ⟨ m ⟩ ⟧ ⊸ ⟦ r' , l ∷ t ⟨ m' ⟩ ⟧
+  e-projrcd : ∀ {r l v} → l ∷ v ∈ r → Value ⟨ r ⟩ → (⟨ r ⟩ ‼ l) ⊸ v
+  e-rcd : ∀ {r l t t'} → t ⊸ t' → l ∷ t ∈ r → ⟨ r ⟩ ⊸ ⟨ r , l ∷ t' ⟩
+
+preservation : ∀ {Γ t t' T}
+  → Γ :- t ∷ T
+  → t ⊸ t'
+  → Γ :- t' ∷ T
+preservation (t-app t₁∷T₁₁=>T t₂∷T₁₁) (e-app₁ t⊸t') = t-app (preservation t₁∷T₁₁=>T t⊸t') t₂∷T₁₁
+preservation (t-app t₁∷T₁₁=>T t₂∷T₁₁) (e-app₂ t⊸t' x) = t-app t₁∷T₁₁=>T (preservation t₂∷T₁₁ t⊸t')
+preservation (t-app t₁∷T₁₁=>T t₂∷T₁₁) (e-appabs _) with lemma-15'3'3 t₁∷T₁₁=>T
+... | T₁₂<:T₁₁ , T₁₁∷T = lemma-substitution T₁₁∷T (t-sub t₂∷T₁₁ T₁₂<:T₁₁)
+preservation (t-sub t∷S S<:T) t⊸t' = t-sub (preservation t∷S t⊸t') S<:T
+preservation (t-rcd {Γ = Γ} {ρ = ρ} {r = r} P) (e-rcd {l = l} {t' = t'} t⊸t' l∷t∈r) = t-rcd f
+  where
+    f : ∀ {l₁ T₁} → l₁ ∷ T₁ ∈ ρ → Σ[ t₁ ∈ Term ] (l₁ ∷ t₁ ∈ (r , l ∷ t')) × (Γ :- t₁ ∷ T₁)
+    f {l₁ = l₁} l₁∷T₁∈ρ with l₁ ≟ l | P l₁∷T₁∈ρ
+    ... | no ¬l₁≡l | t₁ , l₁∷t₁∈r , t₁∷T₁ = t₁ , (suc l₁∷t₁∈r ¬l₁≡l) , t₁∷T₁
+    ... | yes refl | t₁ , l₁∷t₁∈r , t₁∷T₁ with rcd-uniq l₁∷t₁∈r l∷t∈r
+    ... | refl = t' , zero , preservation t₁∷T₁ t⊸t'
+preservation (t-proj t∷⟨ρ⟩ l∷T∈ρ) (e-proj t⊸t') = t-proj (preservation t∷⟨ρ⟩ t⊸t') l∷T∈ρ
+preservation (t-proj ⟨r⟩∷⟨ρ⟩ l∷T∈ρ) (e-projrcd l∷t∈r _) with lemma-match ⟨r⟩∷⟨ρ⟩ l∷T∈ρ
+... | t₁ , l∷t₁∈r , t₁∷T with rcd-uniq l∷t₁∈r l∷t∈r
+... | refl = t₁∷T
+
+data Progress (t : Term) : Set where
+  step : ∀ {t'} → t ⊸ t' → Progress t
+  done : Value t → Progress t
+
+progress : ∀{t A} → Ø :- t ∷ A → Progress t
+progress (t-abs _) = done v-ƛ
+progress (t-app t₁ t₂) with progress t₁
+... | step t₁' = step (e-app₁ t₁')
+... | done v₁ with progress t₂
+... | step t₂' = step (e-app₂ t₂' v₁)
+... | done z = {!!}
+progress (t-sub z x) = {!!}
+progress (t-rcd P) = {!!}
+progress (t-proj z x) = {!!}
