@@ -50,7 +50,7 @@ lemma-inversion₁ (s-refl {T₁ => T₂}) = (T₁ , T₂) , (refl , s-refl , s-
 lemma-inversion₁ (s-arrow {S₁} {S₂} T₁<:S₁ S₂<∶T₂) = (S₁ , S₂) , (refl , T₁<:S₁ , S₂<∶T₂)
 lemma-inversion₁ (s-trans S<:U U<:T₁=>T₂) with lemma-inversion₁ U<:T₁=>T₂
 ... | (U₁ , U₂) , (refl , T₁<:U₁ , U₂<:T₂) with lemma-inversion₁ S<:U
-... | (S₁ , S₂) , (refl , U₂<:S₁ , S₂<:U₂) = (S₁ , S₂) , (refl , s-trans T₁<:U₁ U₂<:S₁ , s-trans S₂<:U₂ U₂<:T₂)
+...   | (S₁ , S₂) , (refl , U₂<:S₁ , S₂<:U₂) = (S₁ , S₂) , (refl , s-trans T₁<:U₁ U₂<:S₁ , s-trans S₂<:U₂ U₂<:T₂)
 
 lemma-inversion₂ : ∀ {ρ S}
   → S <: ⟨ ρ ⟩
@@ -58,7 +58,7 @@ lemma-inversion₂ : ∀ {ρ S}
 lemma-inversion₂ (s-refl {⟨ ρ ⟩}) = ρ , refl
 lemma-inversion₂ (s-trans S<:U U<:⟨ρ⟩) with lemma-inversion₂ U<:⟨ρ⟩
 ... | ψ , refl with lemma-inversion₂ S<:U
-... | ψ₁ , refl = ψ₁ , refl
+...   | ψ₁ , refl = ψ₁ , refl
 lemma-inversion₂ (s-rcd {ρ = ρ} _) = ρ , refl
 
 lemma-record : ∀ {ρ ψ l T}
@@ -68,8 +68,8 @@ lemma-record : ∀ {ρ ψ l T}
 lemma-record {T = T} s-refl l∷T∈ψ = T , l∷T∈ψ , s-refl
 lemma-record (s-trans ⟨ρ⟩<:U U<:⟨ψ⟩) l∷T∈ψ with lemma-inversion₂ U<:⟨ψ⟩
 ... | ψ₁ , refl with lemma-record U<:⟨ψ⟩ l∷T∈ψ
-... | T₁ , l∷T₁∈ψ₁ , T₁<:T with lemma-record ⟨ρ⟩<:U l∷T₁∈ψ₁
-... | S₁ , l∷S₁∈ρ , S₁<:T₁ = S₁ , l∷S₁∈ρ , s-trans S₁<:T₁ T₁<:T
+...   | T₁ , l∷T₁∈ψ₁ , T₁<:T with lemma-record ⟨ρ⟩<:U l∷T₁∈ψ₁
+...     | S₁ , l∷S₁∈ρ , S₁<:T₁ = S₁ , l∷S₁∈ρ , s-trans S₁<:T₁ T₁<:T
 lemma-record (s-rcd P) = P
 
 data Term : Set where
@@ -94,10 +94,10 @@ lemma-match : ∀ {Γ r ρ T l}
   → Γ :- ⟨ r ⟩ ∷ ⟨ ρ ⟩
   → l ∷ T ∈ ρ
   → Σ[ t ∈ Term ] (l ∷ t ∈ r) × (Γ :- t ∷ T)
-lemma-match (t-sub Γ:-t∷⟨ψ⟩ ⟨ψ⟩<:⟨ρ⟩) l∷T∈ρ with lemma-inversion₂ ⟨ψ⟩<:⟨ρ⟩
+lemma-match (t-sub t∷⟨ψ⟩ ⟨ψ⟩<:⟨ρ⟩) l∷T∈ρ with lemma-inversion₂ ⟨ψ⟩<:⟨ρ⟩
 ... | ψ , refl with lemma-record ⟨ψ⟩<:⟨ρ⟩ l∷T∈ρ
-... | S₁ , l∷S₁∈ψ , S₁<:T with lemma-match Γ:-t∷⟨ψ⟩ l∷S₁∈ψ
-... | t , l∷t∈r , Γ:-t∷S₁ = t , l∷t∈r , t-sub Γ:-t∷S₁ S₁<:T
+...   | S₁ , l∷S₁∈ψ , S₁<:T with lemma-match t∷⟨ψ⟩ l∷S₁∈ψ
+...     | t , l∷t∈r , t∷S₁ = t , l∷t∈r , t-sub t∷S₁ S₁<:T
 lemma-match (t-rcd P) l∷T∈ρ = P l∷T∈ρ
 
 lemma-15'3'3 : ∀ {Γ x S₁ t T₁ T₂}
@@ -106,7 +106,7 @@ lemma-15'3'3 : ∀ {Γ x S₁ t T₁ T₂}
 lemma-15'3'3 (t-abs S₁∷T₂) = s-refl , S₁∷T₂
 lemma-15'3'3 (t-sub S₁∷U₁=>U₂ U₁=>U₂<:T₁=>T₂) with lemma-inversion₁ U₁=>U₂<:T₁=>T₂
 ... | (U₁ , U₂) , refl , T₁<:U₁ , U₂<:T₂ with lemma-15'3'3 S₁∷U₁=>U₂
-... | U₁<:S₁ , S₁∷U₂ = s-trans T₁<:U₁ U₁<:S₁ , t-sub S₁∷U₂ U₂<:T₂
+...   | U₁<:S₁ , S₁∷U₂ = s-trans T₁<:U₁ U₁<:S₁ , t-sub S₁∷U₂ U₂<:T₂
 
 data Value : Term → Set where
   v-ƛ : ∀ {x T t} → Value (ƛ x ∷ T ⊸ t)
@@ -129,7 +129,6 @@ lemma-canonical₂ (t-sub J S<:⟨ρ⟩) v with lemma-inversion₂ S<:⟨ρ⟩
 ... | _ , refl = lemma-canonical₂ J v
 
 postulate [_⊸_]_ : ℕ → Term → Term → Term
-
 postulate lemma-substitution : ∀ {Γ x s t S T} → (Γ , x ∷ S) :- t ∷ T → Γ :- s ∷ S → Γ :- [ x ⊸ s ] t ∷ T
 
 data _⊸_ : Term → Term → Set where
@@ -155,11 +154,11 @@ preservation (t-rcd {Γ = Γ} {ρ = ρ} {r = r} P) (e-rcd {l = l} {t' = t'} t⊸
     f {l₁ = l₁} l₁∷T₁∈ρ with l₁ ≟ l | P l₁∷T₁∈ρ
     ... | no ¬l₁≡l | t₁ , l₁∷t₁∈r , t₁∷T₁ = t₁ , (suc l₁∷t₁∈r ¬l₁≡l) , t₁∷T₁
     ... | yes refl | t₁ , l₁∷t₁∈r , t₁∷T₁ with rcd-uniq l₁∷t₁∈r l∷t∈r
-    ... | refl = t' , zero , preservation t₁∷T₁ t⊸t'
+    ...   | refl = t' , zero , preservation t₁∷T₁ t⊸t'
 preservation (t-proj t∷⟨ρ⟩ l∷T∈ρ) (e-proj t⊸t') = t-proj (preservation t∷⟨ρ⟩ t⊸t') l∷T∈ρ
 preservation (t-proj ⟨r⟩∷⟨ρ⟩ l∷T∈ρ) (e-projrcd l∷t∈r _) with lemma-match ⟨r⟩∷⟨ρ⟩ l∷T∈ρ
 ... | t₁ , l∷t₁∈r , t₁∷T with rcd-uniq l∷t₁∈r l∷t∈r
-... | refl = t₁∷T
+...   | refl = t₁∷T
 
 data Progress (t : Term) : Set where
   step : ∀ {t'} → t ⊸ t' → Progress t
@@ -167,11 +166,16 @@ data Progress (t : Term) : Set where
 
 progress : ∀{t A} → Ø :- t ∷ A → Progress t
 progress (t-abs _) = done v-ƛ
-progress (t-app t₁ t₂) with progress t₁
-... | step t₁' = step (e-app₁ t₁')
-... | done v₁ with progress t₂
-... | step t₂' = step (e-app₂ t₂' v₁)
-... | done z = {!!}
-progress (t-sub z x) = {!!}
-progress (t-rcd P) = {!!}
-progress (t-proj z x) = {!!}
+progress (t-app t₁∷T₁₁=>T t₂∷T₁₁) with progress t₁∷T₁₁=>T
+... | step t₁⊸t₁' = step (e-app₁ t₁⊸t₁')
+... | done v₁ with lemma-canonical₁ t₁∷T₁₁=>T v₁
+...   | _ , refl with progress t₂∷T₁₁
+...     | step t₂⊸t₂' = step (e-app₂ t₂⊸t₂' v₁)
+...     | done v₂ = step (e-appabs v₂)
+progress (t-sub t∷S _) = progress t∷S
+progress (t-rcd {ρ = ρ} P) = {!!}
+progress (t-proj t∷⟨ρ⟩ l∷T∈ρ) with progress t∷⟨ρ⟩
+... | step t⊸t' = step (e-proj t⊸t')
+... | done v with lemma-canonical₂ t∷⟨ρ⟩ v
+...   | _ , refl with lemma-match t∷⟨ρ⟩ l∷T∈ρ
+...     | _ , l∷t∈r , _ = step (e-projrcd l∷t∈r v)
