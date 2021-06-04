@@ -3,7 +3,7 @@ module Subtyping where
 open import Data.Empty using (⊥-elim)
 open import Data.Nat using (ℕ; zero; suc; _≟_)
 open import Data.Product using (Σ; Σ-syntax; _×_; _,_)
-open import Relation.Binary.PropositionalEquality using (_≡_; refl)
+open import Relation.Binary.PropositionalEquality using (_≡_; _≢_; refl)
 open import Relation.Nullary using (¬_; yes; no)
 
 infix 3 _,_∷_
@@ -16,7 +16,7 @@ infix 4 _∷_∈_
 
 data _∷_∈_ {A : Set} : ℕ → A → Rcd A → Set where
   zero : ∀ {r l x} → l ∷ x ∈ (r , l ∷ x)
-  suc : ∀ {r l x l₁ x₁} → l ∷ x ∈ r → ¬ (l ≡ l₁) → l ∷ x ∈ (r , l₁ ∷ x₁)
+  suc : ∀ {r l x l₁ x₁} → l ∷ x ∈ r → l ≢ l₁ → l ∷ x ∈ (r , l₁ ∷ x₁)
 
 data All {A : Set} (P : A → Set) : Rcd A → Set where
   all : ∀ {r} → (∀ {l x} → l ∷ x ∈ r → P x) → All P r
@@ -29,8 +29,8 @@ record Iso {A B : Set} (R : A → B → Set) (r₁ : Rcd A) (r₂ : Rcd B) : Set
 
 rcd-uniq : {A : Set} → {r : Rcd A} → ∀ {l x₁ x₂} → l ∷ x₁ ∈ r → l ∷ x₂ ∈ r → x₁ ≡ x₂
 rcd-uniq zero zero = refl
-rcd-uniq zero (suc _ ¬l≡l₁) = ⊥-elim (¬l≡l₁ refl)
-rcd-uniq (suc _ ¬l≡l₁) zero = ⊥-elim (¬l≡l₁ refl)
+rcd-uniq zero (suc _ l≢l₁) = ⊥-elim (l≢l₁ refl)
+rcd-uniq (suc _ l≢l₁) zero = ⊥-elim (l≢l₁ refl)
 rcd-uniq (suc ∈₁ _) (suc ∈₂ _) = rcd-uniq ∈₁ ∈₂
 
 infix 4 _=>_
@@ -166,7 +166,7 @@ preservation
     to' (suc l₁∷t₁∈r _) = to l₁∷t₁∈r
     from' : ∀ {l₁ T₁} → l₁ ∷ T₁ ∈ ρ → Σ[ t₁ ∈ Term ] l₁ ∷ t₁ ∈ (r , l ∷ t')
     from' {l₁ = l₁} l₁∷T₁∈ρ with l₁ ≟ l | from l₁∷T₁∈ρ
-    ... | no ¬l₁≡l | t₁ , l₁∷t₁∈r = t₁ , suc l₁∷t₁∈r ¬l₁≡l
+    ... | no l₁≢l | t₁ , l₁∷t₁∈r = t₁ , suc l₁∷t₁∈r l₁≢l
     ... | yes refl | _ = t' , zero
     rel' : ∀ {l₁ t₁ T₁} → l₁ ∷ t₁ ∈ (r , l ∷ t') → l₁ ∷ T₁ ∈ ρ → Γ :- t₁ ∷ T₁
     rel' zero l₁∷T₁∈ρ = preservation (rel l∷t∈r l₁∷T₁∈ρ) t⊸t'
