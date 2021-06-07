@@ -21,7 +21,10 @@ data _∷_∈_ {A : Set} : ℕ → A → Rcd A → Set where
 data All {A : Set} (P : A → Set) : Rcd A → Set where
   all : ∀ {r} → (∀ {l x} → l ∷ x ∈ r → P x) → All P r
 
+infix 5 _↔_/_
+
 record Iso {A B : Set} (R : A → B → Set) (r₁ : Rcd A) (r₂ : Rcd B) : Set where
+  constructor _↔_/_
   field
     to : ∀ {l x₁} → l ∷ x₁ ∈ r₁ → Σ[ x₂ ∈ B ] l ∷ x₂ ∈ r₂
     from : ∀ {l x₂} → l ∷ x₂ ∈ r₂ → Σ[ x₁ ∈ A ] l ∷ x₁ ∈ r₁
@@ -104,7 +107,7 @@ lemma-match (t-sub t∷⟨ψ⟩ ⟨ψ⟩<:⟨ρ⟩) l∷T∈ρ with lemma-invers
 ... | ψ , refl with lemma-record ⟨ψ⟩<:⟨ρ⟩ l∷T∈ρ
 ...   | S₁ , l∷S₁∈ψ , S₁<:T with lemma-match t∷⟨ψ⟩ l∷S₁∈ψ
 ...     | t , l∷t∈r , t∷S₁ = t , l∷t∈r , t-sub t∷S₁ S₁<:T
-lemma-match (t-rcd record { from = from ; rel = rel }) l∷T∈ρ with from l∷T∈ρ
+lemma-match (t-rcd (_ ↔ from / rel )) l∷T∈ρ with from l∷T∈ρ
 ... | t , l∷t∈r = t , l∷t∈r , rel l∷t∈r l∷T∈ρ
 
 lemma-15'3'3 : ∀ {Γ x S₁ t T₁ T₂}
@@ -156,18 +159,17 @@ preservation (t-app t₁∷T₁₁=>T t₂∷T₁₁) (e-appabs _) with lemma-15
 ... | T₁₂<:T₁₁ , T₁₁∷T = lemma-substitution T₁₁∷T (t-sub t₂∷T₁₁ T₁₂<:T₁₁)
 preservation (t-sub t∷S S<:T) t⊸t' = t-sub (preservation t∷S t⊸t') S<:T
 preservation
-  (t-rcd {Γ} {r} {ρ} (record { to = to ; from = from ; rel = rel }))
-  (e-rcd {l = l} {t = t} {t' = t'} t⊸t' l∷t∈r)
-  =
-  t-rcd (record { to = to' ; from = from' ; rel = rel' })
+  (t-rcd {Γ = Γ} {r = r} {ρ = ρ} (to ↔ from / rel))
+  (e-rcd {l = l} {t' = t'} t⊸t' l∷t∈r)
+  = t-rcd (to' ↔ from' / rel')
   where
     to' : ∀ {l₁ t₁} → l₁ ∷ t₁ ∈ (r , l ∷ t') → Σ[ T₁ ∈ Type ] l₁ ∷ T₁ ∈ ρ
     to' zero = to l∷t∈r
     to' (suc l₁∷t₁∈r _) = to l₁∷t₁∈r
     from' : ∀ {l₁ T₁} → l₁ ∷ T₁ ∈ ρ → Σ[ t₁ ∈ Term ] l₁ ∷ t₁ ∈ (r , l ∷ t')
     from' {l₁ = l₁} l₁∷T₁∈ρ with l₁ ≟ l | from l₁∷T₁∈ρ
-    ... | no l₁≢l | t₁ , l₁∷t₁∈r = t₁ , suc l₁∷t₁∈r l₁≢l
     ... | yes refl | _ = t' , zero
+    ... | no l₁≢l | t₁ , l₁∷t₁∈r = t₁ , suc l₁∷t₁∈r l₁≢l
     rel' : ∀ {l₁ t₁ T₁} → l₁ ∷ t₁ ∈ (r , l ∷ t') → l₁ ∷ T₁ ∈ ρ → Γ :- t₁ ∷ T₁
     rel' zero l₁∷T₁∈ρ = preservation (rel l∷t∈r l₁∷T₁∈ρ) t⊸t'
     rel' (suc l₁∷t₁∈r _) l₁∷T₁∈ρ = rel l₁∷t₁∈r l₁∷T₁∈ρ
@@ -180,7 +182,9 @@ data Progress (t : Term) : Set where
   step : ∀ {t'} → t ⊸ t' → Progress t
   done : Value t → Progress t
 
-progress : ∀{t A} → Ø :- t ∷ A → Progress t
+postulate rcd-progress : ∀ {r} → (∀ {l t} → (l ∷ t ∈ r) → Progress t) → Progress ⟨ r ⟩
+
+progress : ∀{t T} → Ø :- t ∷ T → Progress t
 progress (t-abs _) = done v-ƛ
 progress (t-app t₁∷T₁₁=>T t₂∷T₁₁) with progress t₁∷T₁₁=>T
 ... | step t₁⊸t₁' = step (e-app₁ t₁⊸t₁')
@@ -189,7 +193,11 @@ progress (t-app t₁∷T₁₁=>T t₂∷T₁₁) with progress t₁∷T₁₁=>
 ...     | step t₂⊸t₂' = step (e-app₂ t₂⊸t₂' v₁)
 ...     | done v₂ = step (e-appabs v₂)
 progress (t-sub t∷S _) = progress t∷S
-progress (t-rcd record { to = to ; from = from ; rel = rel }) = {!!}
+progress (t-rcd {r = r} (to ↔ _ / rel)) = rcd-progress P
+  where
+    P : ∀ {l t} → l ∷ t ∈ r → Progress t
+    P l∷t∈r with to l∷t∈r
+    ... | _ , l∷T∈ρ = progress (rel l∷t∈r l∷T∈ρ)
 progress (t-proj t∷⟨ρ⟩ l∷T∈ρ) with progress t∷⟨ρ⟩
 ... | step t⊸t' = step (e-proj t⊸t')
 ... | done v with lemma-canonical₂ t∷⟨ρ⟩ v
