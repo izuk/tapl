@@ -1,4 +1,4 @@
-module Data.Records where
+module Data.Record where
 
 open import Data.Empty using (⊥-elim)
 open import Data.Nat using (ℕ; _≥_; _≟_; zero; suc)
