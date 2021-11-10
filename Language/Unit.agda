@@ -1,165 +1,86 @@
 module Language.Unit where
 
+open import Data.Rcd using (Rcd; Ø; _,_∷_⟨_⟩; _∉_; _∷_∈_)
 open import Data.Nat using (ℕ; _≟_; _<?_; suc; pred; zero; compare; less; equal; greater)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl)
 open import Relation.Nullary using (Dec; yes; no; ¬_)
 
-infixr 7 _=>_
+infixr 7 _⇒_
 
 data Type : Set where
-  _=>_ : Type → Type → Type
+  _⇒_ : Type → Type → Type
   Unit : Type
 
 infix 9 #_
-infix 5 ƛ_⊸_
-infix 7 _∙_
+infix 5 ƛ_∷_∙_
+infix 7 _∘_
 
 data Term : Set where
   #_ : ℕ → Term
-  ƛ_⊸_ :  Type → Term → Term
-  _∙_ :  Term → Term → Term
+  ƛ_∷_∙_ :  ℕ → Type → Term → Term
+  _∘_ :  Term → Term → Term
   unit : Term
 
 data Value : Term → Set where
-  V-ƛ : ∀ {A t} → Value (ƛ A ⊸ t)
-  V-unit : Value unit
-
-infix 4 _~>_
-
--- depth
--- # x | x == depth -> v
---     | x < depth = x
---     | x > depth = x - 1
+  V-Abs : ∀ {x A t} → Value (ƛ x ∷ A ∙ t)
+  V-Unit : Value unit
 
 infix 5 _[_:=_]
 
 _[_:=_] : Term → ℕ → Term → Term
-(# x) [ k := t ] with compare k x
-... | less _ _ = # (pred x)
-... | equal _ = t
-... | greater _ _ = # x
-(ƛ A ⊸ t₁) [ k := t ] = ƛ A ⊸ (t₁ [ suc k := t ])
-(L ∙ M) [ k := t ] = (L [ k := t ]) ∙ (M [ k := t ])
-t [ _ := _ ] = t
+# x₁ [ x := t ] with x₁ ≟ x
+... | yes _ = t
+... | no _ = # x₁
+(ƛ x₁ ∷ A ∙ t₁) [ x := t ] with x₁ ≟ x
+... | yes _ = ƛ x₁ ∷ A ∙ t₁
+... | no _ = ƛ x₁ ∷ A ∙ (t₁ [ x := t ])
+t₁ ∘ t₂ [ x := t ] = (t₁ [ x := t ]) ∘ (t₂ [ x := t ])
+unit [ x := t₁ ] = unit
 
-data _~>_ : Term → Term → Set where
-  E-App₁ : ∀ {t₁ t₂ t} → t₁ ~> t₂ → t₁ ∙ t ~> t₂ ∙ t
-  E-App₂ : ∀ {t t₁ t₂} → Value t → t₁ ~> t₂ → t ∙ t₁ ~> t ∙ t₂
-  E-AppAbs : ∀ {A t₁ t₂} → Value t₂ → (ƛ A ⊸ t₁) ∙ t₂ ~> t₁ [ 0 := t₂ ]
+infix 3 _↝_
 
-import Normalization
-open module Normalization-Unit = Normalization Term Value _~>_
+data _↝_ : Term → Term → Set where
+  E-App₁ : ∀ {t₁ t₂ t} → t₁ ↝ t₂ → t₁ ∘ t ↝ t₂ ∘ t
+  E-App₂ : ∀ {t t₁ t₂} → Value t → t₁ ↝ t₂ → t ∘ t₁ ↝ t ∘ t₂
+  E-AppAbs : ∀ {x A t₁ t₂} → Value t₂ → (ƛ x ∷ A ∙ t₁) ∘ t₂ ↝ t₁ [ x := t₂ ]
 
-import Context
-open module Context-Unit = Context Type using (Context; Ø; _,_; _∋_∷_; Z; S)
+Context : Set
+Context = Rcd Type
 
-infix  4  _⊢_∷_
+infix  2  _⊢_∷_
 
 data _⊢_∷_ : Context → Term → Type → Set where
-  ⊢# : ∀ {Γ x A} → Γ ∋ x ∷ A → Γ ⊢ # x ∷ A
-  ⊢ƛ : ∀ {Γ t B} → (A : Type) → Γ , A ⊢ t ∷ B → Γ ⊢ (ƛ A ⊸ t) ∷ A => B
-  _∙_ : ∀ {Γ t₁ t₂ A B} → Γ ⊢ t₁ ∷ A => B → Γ ⊢ t₂ ∷ A → Γ ⊢ t₁ ∙ t₂ ∷ B
-  ⊢unit : ∀ {Γ} → Γ ⊢ unit ∷ Unit
+  T-Var : ∀ {Γ x A} → x ∷ A ∈ Γ → Γ ⊢ # x ∷ A
+  T-Abs : ∀ {Γ x A t B x∉Γ} → Γ , x ∷ A ⟨ x∉Γ ⟩ ⊢ t ∷ B → Γ ⊢ (ƛ x ∷ A ∙ t) ∷ A ⇒ B
+  T-App : ∀ {Γ t₁ t₂ A B} → Γ ⊢ t₁ ∷ A ⇒ B → Γ ⊢ t₂ ∷ A → Γ ⊢ t₁ ∘ t₂ ∷ B
+  T-Unit : ∀ {Γ} → Γ ⊢ unit ∷ Unit
+
+data Progress (t : Term) : Set where
+  step : ∀ {t'} → t ↝ t' → Progress t
+  done : Value t → Progress t
 
 progress : ∀ {t A} → Ø ⊢ t ∷ A → Progress t
-progress (⊢ƛ _ _) = done V-ƛ 
-progress (⊢L ∙ ⊢R) with progress ⊢L
-... | step x₁ = step (E-App₁ x₁)
-... | done V-ƛ with progress ⊢R
-...   | step x₂ = step (E-App₂ V-ƛ x₂)
+progress (T-Abs x) = done V-Abs
+progress (T-App t₁ t₂) with progress t₁
+... | step t₁↝t₁' = step (E-App₁ t₁↝t₁')
+... | done V-Abs with progress t₂
+...   | step t₂↝t₂' = step (E-App₂ V-Abs t₂↝t₂')
 ...   | done v₂ = step (E-AppAbs v₂)
-progress ⊢unit = done V-unit
+progress T-Unit = done V-Unit
 
--- Given:
--- Γ ⊢ t₁ ∷ A₁
--- Γ , A₁ , A ⊢ t ∷ B
+subst-lemma : ∀ {Γ t₁ x t A₁ A x∉Γ}
+  → Γ ⊢ t ∷ A
+  → Γ , x ∷ A ⟨ x∉Γ ⟩ ⊢ t₁ ∷ A₁
+  → Γ ⊢ t₁ [ x := t ] ∷ A₁
+subst-lemma {x = x} {t = t} t∷A (T-Var {x = x₁} x₁∷A₁) with x ≟ x₁ | # x₁ [ x := t ]
+... | yes _ | z = {!!}
+... | no _ | z = {!!}
+subst-lemma t∷A (T-Abs q) = {!!}
+subst-lemma t∷A (T-App t₁₁∷A₂⇒A₁ t₁₂∷A₂) = T-App (subst-lemma t∷A t₁₁∷A₂⇒A₁) (subst-lemma t∷A t₁₂∷A₂)
+subst-lemma t∷A T-Unit = T-Unit
 
--- Prove:
--- Γ , A ⊢ t [ 1 := t₁ ] ∷ B
+preservation : ∀ {Γ t t' A} → Γ ⊢ t ∷ A → t ↝ t' → Γ ⊢ t' ∷ A
+preservation (T-App t₁ t₂) (E-App₁ t₁↝t₁') = T-App (preservation t₁ t₁↝t₁') t₂
+preservation (T-App t₁ t₂) (E-App₂ _ t₂↝t₂') = T-App t₁ (preservation t₂ t₂↝t₂')
+preservation (T-App (T-Abs t₁∷A₁) t∷A) (E-AppAbs _) = subst-lemma t∷A t₁∷A₁
 
-ext : ∀ {Γ Δ}
-  → (∀ {A k l} → Γ ∋ k ∷ A → Δ ∋ l ∷ A)
-  → (∀ {A B k l} → Γ , B ∋ k ∷ A → Δ , B ∋ l ∷ A)
-ext ρ Z = {!!} 
-ext ρ (S x) = {!!}
-
-lemma : ∀ {Γ t t₁ A A₁ B} → Γ ⊢ t₁ ∷ A₁ → Γ , A₁ , A ⊢ t ∷ B → Γ , A ⊢ t [ 1 := t₁ ] ∷ B
-lemma T₁ (⊢# x) = {!!}
-lemma T₁ (⊢ƛ A T) = {!!}
-lemma T₁ (T₂₁ ∙ T₂₂) = lemma T₁ T₂₁ ∙ lemma T₁ T₂₂
-lemma T₁ ⊢unit = ⊢unit
-
-subst-lemma : ∀ {Γ t₁ t A₁ A} → Γ ⊢ t₁ ∷ A₁ → Γ , A₁ ⊢ t ∷ A → Γ ⊢ t [ 0 := t₁ ] ∷ A
-subst-lemma T₁ (⊢# Z) = T₁
-subst-lemma T₁ (⊢# (S x)) = ⊢# x
-subst-lemma T₁ (⊢ƛ A Tƛ) = ⊢ƛ A (lemma T₁ Tƛ)
-subst-lemma T₁ (T₂₁ ∙ T₂₂) = subst-lemma T₁ T₂₁ ∙ subst-lemma T₁ T₂₂
-subst-lemma T₁ ⊢unit = ⊢unit
-
-preservation : ∀{t₁ t₂ Γ A} → Γ ⊢ t₁ ∷ A → t₁ ~> t₂ → Γ ⊢ t₂ ∷ A
-preservation (T₁₁ ∙ T₁₂) (E-App₁ p) = preservation T₁₁ p ∙ T₁₂
-preservation (T₁₁ ∙ T₁₂) (E-App₂ _ p) = T₁₁ ∙ preservation T₁₂ p
-preservation (⊢ƛ _ T₁₁ ∙ T₂) (E-AppAbs _) = subst-lemma T₂ T₁₁
-
-module Tests where
-
-  id : Term
-  id = ƛ Unit ⊸ # 0
-
-  const : Term
-  const = ƛ Unit ⊸ unit
-
-  test-0 : (id ∙ unit) ~> unit
-  test-0 = E-AppAbs V-unit
-
-  test-1 : (const ∙ unit) ~> unit
-  test-1 = E-AppAbs V-unit
-
-  app : Term
-  app = ƛ (Unit => Unit) ⊸ # 0 ∙ unit
-
-  test-2 : (app ∙ id) ~~> unit
-  test-2 =
-    begin
-      app ∙ id
-    ~>⟨ E-AppAbs V-ƛ ⟩
-      id ∙ unit
-    ~>⟨ E-AppAbs V-unit ⟩
-      unit
-    ∎
-
-  test-3 : const ∙ (id ∙ unit) ~~> unit
-  test-3 =
-    begin
-      const ∙ (id ∙ unit)
-    ~>⟨ E-App₂ V-ƛ test-0 ⟩
-      const ∙ unit
-    ~>⟨ test-1 ⟩
-      unit
-    ∎
-
-  two : Term
-  two = ƛ (Unit => Unit) ⊸ (ƛ Unit ⊸ # 1 ∙ (# 1 ∙ # 0))
-
-  test-two : (two ∙ id) ∙ unit ~~> unit
-  test-two =
-    begin
-      (two ∙ id) ∙ unit
-    ~>⟨ E-App₁ (E-AppAbs V-ƛ) ⟩
-      (ƛ Unit ⊸ id ∙ (id ∙ # 0)) ∙ unit
-    ~>⟨ E-AppAbs V-unit ⟩
-      id ∙ (id ∙ unit)
-    ~>⟨ E-App₂ V-ƛ (E-AppAbs V-unit) ⟩
-      id ∙ unit
-    ~>⟨ E-AppAbs V-unit ⟩
-      unit
-    ∎
-  
-  test-unit : Ø ⊢ unit ∷ Unit
-  test-unit = ⊢unit
-
-  test-id : Ø ⊢ ƛ Unit ⊸ # 0 ∷ Unit => Unit
-  test-id = ⊢ƛ Unit (⊢# Z)
-
-  test-app : Ø ⊢ (ƛ Unit ⊸ # 0) ∙ unit ∷ Unit
-  test-app = test-id ∙ test-unit
