@@ -1,0 +1,3 @@
+name: tapl
+include: .
+depend: standard-library
